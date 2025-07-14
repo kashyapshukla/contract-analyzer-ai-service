@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import uvicorn
@@ -7,6 +8,8 @@ import json
 import re
 from datetime import datetime
 import uuid
+from enhanced_analysis import EnhancedContractAnalyzer
+from report_generator import ContractReportGenerator
 
 app = FastAPI(
     title="AI Contract Risk Analyzer",
@@ -50,137 +53,18 @@ class AnalysisResponse(BaseModel):
     summary: str
     timestamp: str
 
+# Initialize enhanced analyzer
+analyzer = EnhancedContractAnalyzer()
+report_generator = ContractReportGenerator()
+
 def analyze_contract_content(content: str) -> Dict[str, Any]:
-    """AI-powered contract analysis"""
+    """Enhanced AI-powered contract analysis"""
     
-    # Risk patterns to detect
-    risk_patterns = {
-        "payment_terms": {
-            "patterns": [
-                r"payment.*due.*\d+.*days",
-                r"late.*payment.*\d+%",
-                r"interest.*charge"
-            ],
-            "category": "Payment Terms",
-            "severity": "medium"
-        },
-        "liability": {
-            "patterns": [
-                r"limitation.*liability",
-                r"total.*liability.*not.*exceed",
-                r"damages.*limited"
-            ],
-            "category": "Liability Limitations",
-            "severity": "high"
-        },
-        "termination": {
-            "patterns": [
-                r"terminate.*\d+.*days.*notice",
-                r"termination.*without.*cause",
-                r"immediate.*termination"
-            ],
-            "category": "Termination Clauses",
-            "severity": "medium"
-        },
-        "confidentiality": {
-            "patterns": [
-                r"confidential.*information",
-                r"non-disclosure",
-                r"trade.*secrets"
-            ],
-            "category": "Confidentiality",
-            "severity": "low"
-        },
-        "intellectual_property": {
-            "patterns": [
-                r"intellectual.*property",
-                r"copyright",
-                r"patent",
-                r"trademark"
-            ],
-            "category": "Intellectual Property",
-            "severity": "high"
-        }
-    }
-    
-    # Compliance patterns
-    compliance_patterns = {
-        "gdpr": {
-            "patterns": [r"personal.*data", r"data.*protection", r"privacy"],
-            "regulation": "GDPR",
-            "status": "check"
-        },
-        "sox": {
-            "patterns": [r"financial.*reporting", r"internal.*controls", r"audit"],
-            "regulation": "SOX",
-            "status": "check"
-        },
-        "hipaa": {
-            "patterns": [r"health.*information", r"medical.*records", r"phi"],
-            "regulation": "HIPAA",
-            "status": "check"
-        }
-    }
-    
-    # Analyze risks
-    risks = []
-    risk_score = 0
-    
-    for risk_type, config in risk_patterns.items():
-        for pattern in config["patterns"]:
-            matches = re.finditer(pattern, content, re.IGNORECASE)
-            for match in matches:
-                clause = match.group(0)
-                context_start = max(0, match.start() - 50)
-                context_end = min(len(content), match.end() + 50)
-                full_clause = content[context_start:context_end]
-                
-                severity_score = {"low": 1, "medium": 2, "high": 3}[config["severity"]]
-                risk_score += severity_score
-                
-                risks.append({
-                    "category": config["category"],
-                    "severity": config["severity"],
-                    "description": f"Potential {config['category'].lower()} risk detected",
-                    "clause": full_clause.strip(),
-                    "recommendation": f"Review {config['category'].lower()} terms with legal counsel"
-                })
-    
-    # Analyze compliance
-    compliance = []
-    
-    for compliance_type, config in compliance_patterns.items():
-        for pattern in config["patterns"]:
-            matches = re.finditer(pattern, content, re.IGNORECASE)
-            for match in matches:
-                clause = match.group(0)
-                context_start = max(0, match.start() - 50)
-                context_end = min(len(content), match.end() + 50)
-                full_clause = content[context_start:context_end]
-                
-                compliance.append({
-                    "regulation": config["regulation"],
-                    "status": config["status"],
-                    "description": f"Potential {config['regulation']} compliance requirement",
-                    "clause": full_clause.strip()
-                })
-    
-    # Determine overall risk level
-    if risk_score >= 10:
-        risk_level = "HIGH"
-    elif risk_score >= 5:
-        risk_level = "MEDIUM"
-    else:
-        risk_level = "LOW"
-    
-    # Generate summary
-    summary = f"Contract analysis completed. Risk level: {risk_level}. "
-    summary += f"Found {len(risks)} potential risk items and {len(compliance)} compliance considerations. "
-    
-    if risk_score > 0:
-        summary += "Recommend legal review before signing."
-    else:
-        summary += "Contract appears to have standard terms."
+    # Use enhanced analyzer
+    risks, risk_score = analyzer.analyze_risks(content)
+    compliance = analyzer.analyze_compliance(content)
+    risk_level = analyzer.calculate_risk_level(risk_score)
+    summary = analyzer.generate_summary(risks, compliance, risk_score)
     
     return {
         "risk_level": risk_level,
@@ -225,7 +109,7 @@ async def analyze_contract(request: AnalysisRequest):
 
 @app.post("/analyze-file")
 async def analyze_file(file: UploadFile = File(...)):
-    """Analyze uploaded contract file"""
+    """Analyze uploaded contract file with enhanced parsing"""
     
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -233,11 +117,17 @@ async def analyze_file(file: UploadFile = File(...)):
     # Read file content
     try:
         content = await file.read()
-        content_str = content.decode('utf-8')
+        
+        # Use enhanced text extraction based on file type
+        content_str = analyzer.extract_text_from_file(content, file.content_type)
+        
+        if content_str.startswith("Error"):
+            raise HTTPException(status_code=400, detail=content_str)
+            
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
     
-    # Perform analysis
+    # Perform enhanced analysis
     analysis_result = analyze_contract_content(content_str)
     
     # Generate unique analysis ID
@@ -253,6 +143,68 @@ async def analyze_file(file: UploadFile = File(...)):
         "summary": analysis_result["summary"],
         "timestamp": datetime.now().isoformat()
     }
+
+@app.post("/generate-report")
+async def generate_report(request: AnalysisRequest):
+    """Generate PDF report for contract analysis"""
+    
+    try:
+        # Perform analysis
+        analysis_result = analyze_contract_content(request.content)
+        
+        # Add metadata
+        analysis_result["analysis_id"] = str(uuid.uuid4())
+        analysis_result["filename"] = request.filename
+        analysis_result["timestamp"] = datetime.now().isoformat()
+        
+        # Generate PDF report
+        pdf_buffer = report_generator.generate_pdf_report(analysis_result, request.filename)
+        
+        # Return PDF as streaming response
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=contract_analysis_{analysis_result['analysis_id'][:8]}.pdf"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+
+@app.post("/analyze-file-report")
+async def analyze_file_and_generate_report(file: UploadFile = File(...)):
+    """Analyze uploaded file and generate PDF report"""
+    
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    
+    try:
+        # Read and parse file
+        content = await file.read()
+        content_str = analyzer.extract_text_from_file(content, file.content_type)
+        
+        if content_str.startswith("Error"):
+            raise HTTPException(status_code=400, detail=content_str)
+        
+        # Perform analysis
+        analysis_result = analyze_contract_content(content_str)
+        
+        # Add metadata
+        analysis_result["analysis_id"] = str(uuid.uuid4())
+        analysis_result["filename"] = file.filename
+        analysis_result["timestamp"] = datetime.now().isoformat()
+        
+        # Generate PDF report
+        pdf_buffer = report_generator.generate_pdf_report(analysis_result, file.filename)
+        
+        # Return PDF as streaming response
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=contract_analysis_{analysis_result['analysis_id'][:8]}.pdf"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to analyze and generate report: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 
