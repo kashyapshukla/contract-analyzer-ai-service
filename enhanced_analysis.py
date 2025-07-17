@@ -4,9 +4,15 @@ from docx import Document
 from io import BytesIO
 from typing import Dict, List, Any, Tuple
 import json
+import os
+import requests
 
 class EnhancedContractAnalyzer:
     def __init__(self):
+        # Configure Hugging Face
+        self.huggingface_api_key = os.getenv("HUGGINGFACE_API_KEY")
+        self.huggingface_api_url = "https://api-inference.huggingface.co/models"
+        
         # Enhanced risk patterns with more sophisticated detection
         self.risk_patterns = {
             "payment_terms": {
@@ -199,6 +205,164 @@ class EnhancedContractAnalyzer:
             return self.parse_text(file_content)
         else:
             return "Unsupported file type"
+
+    async def analyze_with_huggingface(self, content: str) -> Dict[str, Any]:
+        """Analyze contract using Hugging Face Inference API"""
+        try:
+            if not self.huggingface_api_key:
+                raise Exception("Hugging Face API key not configured")
+            
+            # Use a good text generation model for analysis
+            model_name = "gpt2"  # Good for text generation and analysis
+            
+            headers = {
+                "Authorization": f"Bearer {self.huggingface_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # Create a structured prompt for contract analysis
+            prompt = f"""
+            Analyze this contract for legal risks and compliance issues. Provide analysis in this JSON format:
+            {{
+                "overall_risk": "LOW|MEDIUM|HIGH|CRITICAL",
+                "confidence": 0.0-1.0,
+                "risks": [
+                    {{
+                        "category": "risk category",
+                        "severity": "LOW|MEDIUM|HIGH|CRITICAL", 
+                        "description": "detailed description",
+                        "clause": "section reference",
+                        "recommendation": "specific recommendation"
+                    }}
+                ],
+                "compliance": [
+                    {{
+                        "regulation": "compliance type",
+                        "status": "check|warning|critical",
+                        "description": "detailed description",
+                        "clause": "section reference"
+                    }}
+                ],
+                "summary": "overall analysis summary"
+            }}
+            
+            Contract content: {content[:2000]}
+            
+            Focus on: liability, indemnification, termination, confidentiality, force majeure, arbitration, GDPR, SOX, HIPAA compliance.
+            """
+            
+            payload = {
+                "inputs": prompt,
+                "parameters": {
+                    "max_length": 1000,
+                    "temperature": 0.3,
+                    "do_sample": True
+                }
+            }
+            
+            response = requests.post(
+                f"{self.huggingface_api_url}/{model_name}",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"Hugging Face API error: {response.status_code}")
+            
+            result = response.json()
+            
+            # Extract the generated text
+            if isinstance(result, list) and len(result) > 0:
+                generated_text = result[0].get("generated_text", "")
+            else:
+                generated_text = str(result)
+            
+            # Try to extract JSON from the response
+            try:
+                # Look for JSON in the generated text
+                json_start = generated_text.find('{')
+                json_end = generated_text.rfind('}') + 1
+                if json_start != -1 and json_end != 0:
+                    json_str = generated_text[json_start:json_end]
+                    return json.loads(json_str)
+                else:
+                    # If no JSON found, create structured response from text
+                    return self.create_structured_response_from_text(generated_text, content)
+            except json.JSONDecodeError:
+                # Fallback: create structured response from generated text
+                return self.create_structured_response_from_text(generated_text, content)
+                
+        except Exception as e:
+            print(f"Hugging Face analysis failed: {str(e)}")
+            return None
+
+    def create_structured_response_from_text(self, text: str, original_content: str) -> Dict[str, Any]:
+        """Create structured response from Hugging Face text output"""
+        content_lower = original_content.lower()
+        
+        # Analyze the generated text and original content
+        risks = []
+        compliance = []
+        
+        # Extract risk information from patterns
+        for risk_type, config in self.risk_patterns.items():
+            for pattern in config["patterns"]:
+                if re.search(pattern, content_lower, re.IGNORECASE):
+                    risks.append({
+                        "category": config["category"],
+                        "severity": config["severity"],
+                        "description": f"Potential {config['category'].lower()} risk detected",
+                        "clause": f"Section containing {risk_type} terms",
+                        "recommendation": self._generate_recommendation(config["category"], config["severity"])
+                    })
+                    break
+        
+        # Extract compliance information
+        for compliance_type, config in self.compliance_patterns.items():
+            for pattern in config["patterns"]:
+                if re.search(pattern, content_lower, re.IGNORECASE):
+                    compliance.append({
+                        "regulation": config["regulation"],
+                        "status": config["status"],
+                        "description": f"Potential {config['regulation']} compliance requirement",
+                        "clause": f"Section containing {compliance_type} terms"
+                    })
+                    break
+        
+        # Determine overall risk level
+        risk_score = sum([{"low": 1, "medium": 2, "high": 3}[r["severity"]] * 2 for r in risks])
+        overall_risk = self.calculate_risk_level(risk_score)
+        
+        # Create summary from AI analysis
+        summary = f"AI analysis completed with {overall_risk.lower()} overall risk level. Found {len(risks)} risk items and {len(compliance)} compliance issues."
+        
+        return {
+            "overall_risk": overall_risk,
+            "confidence": min(0.95, 0.7 + (len(risks) * 0.05) + (len(compliance) * 0.03)),
+            "risks": risks,
+            "compliance": compliance,
+            "summary": summary,
+            "risk_score": risk_score
+        }
+
+    async def analyze_risks_with_ai(self, content: str) -> Tuple[List[Dict], int]:
+        """Analyze risks using AI with fallback to pattern matching"""
+        # Try Hugging Face first
+        huggingface_result = await self.analyze_with_huggingface(content)
+        
+        if huggingface_result:
+            try:
+                risks = huggingface_result.get("risks", [])
+                risk_score = huggingface_result.get("risk_score", 0)
+                return risks, risk_score
+            except Exception as e:
+                print(f"Error parsing Hugging Face result: {str(e)}")
+                # Fallback to pattern matching
+                return self.analyze_risks(content)
+        else:
+            # Fallback to pattern matching
+            return self.analyze_risks(content)
 
     def analyze_risks(self, content: str) -> Tuple[List[Dict], int]:
         """Enhanced risk analysis with sophisticated detection"""

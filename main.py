@@ -57,11 +57,11 @@ class AnalysisResponse(BaseModel):
 analyzer = EnhancedContractAnalyzer()
 report_generator = ContractReportGenerator()
 
-def analyze_contract_content(content: str) -> Dict[str, Any]:
-    """Enhanced AI-powered contract analysis"""
+async def analyze_contract_content(content: str) -> Dict[str, Any]:
+    """Enhanced AI-powered contract analysis with Hugging Face integration"""
     
-    # Use enhanced analyzer
-    risks, risk_score = analyzer.analyze_risks(content)
+    # Use enhanced analyzer with AI
+    risks, risk_score = await analyzer.analyze_risks_with_ai(content)
     compliance = analyzer.analyze_compliance(content)
     risk_level = analyzer.calculate_risk_level(risk_score)
     summary = analyzer.generate_summary(risks, compliance, risk_score)
@@ -88,7 +88,7 @@ async def analyze_contract(request: AnalysisRequest):
     
     try:
         # Perform AI analysis
-        analysis_result = analyze_contract_content(request.content)
+        analysis_result = await analyze_contract_content(request.content)
         
         # Generate unique analysis ID
         analysis_id = str(uuid.uuid4())
@@ -127,8 +127,8 @@ async def analyze_file(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
     
-    # Perform enhanced analysis
-    analysis_result = analyze_contract_content(content_str)
+            # Perform enhanced analysis
+        analysis_result = await analyze_contract_content(content_str)
     
     # Generate unique analysis ID
     analysis_id = str(uuid.uuid4())
@@ -150,7 +150,7 @@ async def generate_report(request: AnalysisRequest):
     
     try:
         # Perform analysis
-        analysis_result = analyze_contract_content(request.content)
+        analysis_result = await analyze_contract_content(request.content)
         
         # Add metadata
         analysis_result["analysis_id"] = str(uuid.uuid4())
@@ -186,7 +186,7 @@ async def analyze_file_and_generate_report(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=content_str)
         
         # Perform analysis
-        analysis_result = analyze_contract_content(content_str)
+        analysis_result = await analyze_contract_content(content_str)
         
         # Add metadata
         analysis_result["analysis_id"] = str(uuid.uuid4())
