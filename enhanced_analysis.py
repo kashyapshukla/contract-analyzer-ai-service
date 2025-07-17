@@ -13,6 +13,8 @@ class EnhancedContractAnalyzer:
         self.huggingface_api_key = os.getenv("HUGGINGFACE_API_KEY")
         self.huggingface_api_url = "https://api-inference.huggingface.co/models"
         
+        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY") or "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"
+        
         # Enhanced risk patterns with more sophisticated detection
         self.risk_patterns = {
             "payment_terms": {
@@ -212,43 +214,23 @@ class EnhancedContractAnalyzer:
             if not self.huggingface_api_key:
                 raise Exception("Hugging Face API key not configured")
             
-            # Use a reliable and available model for text analysis
-            model_name = "gpt2"  # Reliable and always available
+            # Use a simple and reliable model for text analysis
+            model_name = "distilgpt2"  # Smaller, more reliable version
             
             headers = {
                 "Authorization": f"Bearer {self.huggingface_api_key}",
                 "Content-Type": "application/json"
             }
             
-            # Create a structured prompt for contract analysis
+            # Create a simple prompt for contract analysis
             prompt = f"""
-            Analyze this contract for legal risks and compliance issues. Provide analysis in this JSON format:
-            {{
-                "overall_risk": "LOW|MEDIUM|HIGH|CRITICAL",
-                "confidence": 0.0-1.0,
-                "risks": [
-                    {{
-                        "category": "risk category",
-                        "severity": "LOW|MEDIUM|HIGH|CRITICAL", 
-                        "description": "detailed description",
-                        "clause": "section reference",
-                        "recommendation": "specific recommendation"
-                    }}
-                ],
-                "compliance": [
-                    {{
-                        "regulation": "compliance type",
-                        "status": "check|warning|critical",
-                        "description": "detailed description",
-                        "clause": "section reference"
-                    }}
-                ],
-                "summary": "overall analysis summary"
-            }}
+            Analyze this contract for legal risks and compliance issues.
             
             Contract content: {content[:2000]}
             
             Focus on: liability, indemnification, termination, confidentiality, force majeure, arbitration, GDPR, SOX, HIPAA compliance.
+            
+            Provide a brief analysis of the key risks and compliance issues found.
             """
             
             payload = {
@@ -301,71 +283,44 @@ class EnhancedContractAnalyzer:
                 print("Hugging Face API key is invalid. Please check your token.")
             return None
 
-    def create_structured_response_from_text(self, text: str, original_content: str) -> Dict[str, Any]:
-        """Create structured response from Hugging Face text output"""
-        content_lower = original_content.lower()
-        
-        # Analyze the generated text and original content
-        risks = []
-        compliance = []
-        
-        # Extract risk information from patterns
-        for risk_type, config in self.risk_patterns.items():
-            for pattern in config["patterns"]:
-                if re.search(pattern, content_lower, re.IGNORECASE):
-                    risks.append({
-                        "category": config["category"],
-                        "severity": config["severity"],
-                        "description": f"Potential {config['category'].lower()} risk detected",
-                        "clause": f"Section containing {risk_type} terms",
-                        "recommendation": self._generate_recommendation(config["category"], config["severity"])
-                    })
-                    break
-        
-        # Extract compliance information
-        for compliance_type, config in self.compliance_patterns.items():
-            for pattern in config["patterns"]:
-                if re.search(pattern, content_lower, re.IGNORECASE):
-                    compliance.append({
-                        "regulation": config["regulation"],
-                        "status": config["status"],
-                        "description": f"Potential {config['regulation']} compliance requirement",
-                        "clause": f"Section containing {compliance_type} terms"
-                    })
-                    break
-        
-        # Determine overall risk level
-        risk_score = sum([{"low": 1, "medium": 2, "high": 3}[r["severity"]] * 2 for r in risks])
-        overall_risk = self.calculate_risk_level(risk_score)
-        
-        # Create summary from AI analysis
-        summary = f"AI analysis completed with {overall_risk.lower()} overall risk level. Found {len(risks)} risk items and {len(compliance)} compliance issues."
-        
-        return {
-            "overall_risk": overall_risk,
-            "confidence": min(0.95, 0.7 + (len(risks) * 0.05) + (len(compliance) * 0.03)),
-            "risks": risks,
-            "compliance": compliance,
-            "summary": summary,
-            "risk_score": risk_score
-        }
+    def analyze_with_openrouter(self, content: str) -> str:
+        if not self.openrouter_api_key:
+            raise Exception("OpenRouter API key not configured")
+        prompt = (
+            "Analyze this contract for legal risks and compliance issues. "
+            "Provide a detailed summary of risks, compliance issues, and negotiation points.\n\n"
+            f"{content[:2000]}"
+        )
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {self.openrouter_api_key}"},
+            json={
+                "model": "mistralai/mistral-7b-instruct:free",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 1024
+            },
+            timeout=60
+        )
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
 
-    async def analyze_risks_with_ai(self, content: str) -> Tuple[List[Dict], int]:
-        """Analyze risks using AI with fallback to pattern matching"""
-        # Try Hugging Face first
-        huggingface_result = await self.analyze_with_huggingface(content)
-        
-        if huggingface_result:
-            try:
-                risks = huggingface_result.get("risks", [])
-                risk_score = huggingface_result.get("risk_score", 0)
-                return risks, risk_score
-            except Exception as e:
-                print(f"Error parsing Hugging Face result: {str(e)}")
-                # Fallback to pattern matching
-                return self.analyze_risks(content)
-        else:
-            # Fallback to pattern matching
+    async def analyze_risks_with_ai(self, content: str) -> tuple[list[dict], int]:
+        """Analyze risks using OpenRouter LLM with fallback to pattern matching"""
+        try:
+            analysis_text = self.analyze_with_openrouter(content)
+            # You can parse the analysis_text for risks, compliance, etc., or just return as summary
+            # For now, return as a single summary risk
+            risks = [{
+                "category": "LLM Analysis",
+                "severity": "medium",
+                "description": analysis_text,
+                "clause": "",
+                "recommendation": "Review the LLM-generated analysis above."
+            }]
+            risk_score = 10  # You can improve this by parsing the text for severity
+            return risks, risk_score
+        except Exception as e:
+            print(f"OpenRouter analysis failed: {str(e)}")
             return self.analyze_risks(content)
 
     def analyze_risks(self, content: str) -> Tuple[List[Dict], int]:
