@@ -14,6 +14,7 @@ class EnhancedContractAnalyzer:
         self.huggingface_api_url = "https://api-inference.huggingface.co/models"
         
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY") or "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"
+        print("Loaded OPENROUTER_API_KEY:", repr(self.openrouter_api_key))
         
         # Enhanced risk patterns with more sophisticated detection
         self.risk_patterns = {
