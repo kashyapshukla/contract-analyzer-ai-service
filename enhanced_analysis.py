@@ -212,8 +212,8 @@ class EnhancedContractAnalyzer:
             if not self.huggingface_api_key:
                 raise Exception("Hugging Face API key not configured")
             
-            # Use a better model for text analysis
-            model_name = "microsoft/DialoGPT-medium"  # Better for structured analysis
+            # Use a reliable and available model for text analysis
+            model_name = "gpt2"  # Reliable and always available
             
             headers = {
                 "Authorization": f"Bearer {self.huggingface_api_key}",
