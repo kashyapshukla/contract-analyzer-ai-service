@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 import uuid
 from enhanced_analysis import EnhancedContractAnalyzer
-from report_generator import ContractReportGenerator
+from enhanced_report_generator import EnhancedContractReportGenerator
 
 app = FastAPI(
     title="AI Contract Risk Analyzer",
@@ -55,7 +55,7 @@ class AnalysisResponse(BaseModel):
 
 # Initialize enhanced analyzer
 analyzer = EnhancedContractAnalyzer()
-report_generator = ContractReportGenerator()
+report_generator = EnhancedContractReportGenerator()
 
 async def analyze_contract_content(content: str) -> Dict[str, Any]:
     """Enhanced AI-powered contract analysis with Hugging Face integration"""

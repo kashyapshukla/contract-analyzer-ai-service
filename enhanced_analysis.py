@@ -425,41 +425,51 @@ class EnhancedContractAnalyzer:
         return compliance_issues
 
     def _generate_recommendation(self, category: str, severity: str) -> str:
-        """Generate specific recommendations based on risk category and severity"""
+        """Generate detailed recommendations based on risk category and severity"""
         recommendations = {
             "Payment Terms": {
-                "low": "Review payment terms for reasonableness",
-                "medium": "Negotiate more favorable payment terms",
-                "high": "Seek legal review of payment terms immediately"
+                "low": "STANDARD: Payment terms appear reasonable. Verify they align with your cash flow requirements and business operations.",
+                "medium": "IMPORTANT: Review payment schedule and late fee structure. Consider negotiating 30-60 day payment terms with reasonable late fees (1-2% per month).",
+                "high": "CRITICAL: Immediate attention required. Negotiate payment terms to 30-60 days with late fees capped at 1-2% per month. Request grace period and milestone-based payments for large contracts."
             },
             "Liability Limitations": {
-                "low": "Consider liability insurance coverage",
-                "medium": "Negotiate liability caps and exclusions",
-                "high": "Require legal review before signing"
+                "low": "STANDARD: Liability terms appear reasonable. Consider liability insurance coverage for additional protection.",
+                "medium": "IMPORTANT: Review liability limitations and ensure they're reasonable for your business. Negotiate liability caps and request mutual indemnification.",
+                "high": "CRITICAL: Require legal review before signing. Request liability caps of 12-24 months of contract value. Include mutual indemnification and limit consequential damages."
             },
             "Termination Clauses": {
-                "low": "Ensure adequate notice periods",
-                "medium": "Negotiate termination rights and cure periods",
-                "high": "Review termination provisions carefully"
+                "low": "STANDARD: Termination terms appear reasonable. Ensure adequate notice periods align with your business needs.",
+                "medium": "IMPORTANT: Negotiate termination rights and cure periods. Request 30-60 day notice periods and define material breach clearly.",
+                "high": "CRITICAL: Review termination provisions carefully. Negotiate 30-60 day notice periods, include cure periods for breaches, and request mutual termination rights."
             },
             "Confidentiality": {
-                "low": "Standard confidentiality terms",
-                "medium": "Review confidentiality scope and duration",
-                "high": "Ensure adequate protection of sensitive information"
+                "low": "STANDARD: Confidentiality terms appear appropriate for the business relationship. Ensure scope is reasonable.",
+                "medium": "REVIEW: Review confidentiality scope and duration. Limit confidentiality period to 3-5 years and include exceptions for public information.",
+                "high": "IMPORTANT: Ensure adequate protection of sensitive information. Limit confidentiality scope to essential information only and include return/destruction requirements."
             },
             "Intellectual Property": {
-                "low": "Clarify IP ownership terms",
-                "medium": "Negotiate IP rights and licensing terms",
-                "high": "Require legal review of IP provisions"
+                "low": "STANDARD: IP terms appear reasonable. Clarify IP ownership terms and ensure you retain rights to background IP.",
+                "medium": "IMPORTANT: Negotiate IP rights and licensing terms. Request license to use deliverables and protect existing IP rights.",
+                "high": "CRITICAL: Require legal review of IP provisions. Protect existing IP and limit assignment requirements. Define IP ownership clearly."
             },
             "Data Protection": {
-                "low": "Ensure basic data protection measures",
-                "medium": "Implement comprehensive data protection policies",
-                "high": "Require data protection officer review"
+                "low": "STANDARD: Data protection terms appear adequate. Ensure basic data protection measures are in place.",
+                "medium": "IMPORTANT: Implement comprehensive data protection policies. Review data handling requirements and ensure GDPR/CCPA compliance.",
+                "high": "CRITICAL: Require data protection officer review. Ensure GDPR/CCPA compliance with data breach notification, retention limits, and usage restrictions."
+            },
+            "Force Majeure": {
+                "low": "STANDARD: Force majeure terms appear appropriate for the contract type. Ensure scope is reasonable.",
+                "medium": "REVIEW: Review force majeure provisions and ensure they're reasonable. Include reasonable notice requirements.",
+                "high": "IMPORTANT: Define force majeure events clearly and limit scope to truly unforeseeable events. Include reasonable notice requirements."
+            },
+            "Governing Law": {
+                "low": "STANDARD: Governing law appears appropriate for the contract. Verify jurisdiction implications.",
+                "medium": "REVIEW: Review governing law and venue carefully. Ensure they're appropriate for your business operations.",
+                "high": "IMPORTANT: Consider jurisdiction implications and ensure dispute resolution is reasonable. Review choice of law carefully."
             }
         }
         
-        return recommendations.get(category, {}).get(severity, "Seek legal review")
+        return recommendations.get(category, {}).get(severity, "Seek legal review to ensure terms are appropriate for your business needs.")
 
     def calculate_risk_level(self, risk_score: int) -> str:
         """Calculate overall risk level based on score"""
@@ -475,28 +485,55 @@ class EnhancedContractAnalyzer:
             return "MINIMAL"
 
     def generate_summary(self, risks: List[Dict], compliance: List[Dict], risk_score: int) -> str:
-        """Generate comprehensive analysis summary"""
+        """Generate comprehensive analysis summary with detailed explanations"""
         risk_level = self.calculate_risk_level(risk_score)
         
-        summary = f"Contract analysis completed. Overall risk level: {risk_level}. "
-        summary += f"Risk score: {risk_score}/30. "
+        # Start with overall assessment
+        summary = f"This comprehensive contract analysis reveals a {risk_level.lower()} risk profile with a risk score of {risk_score}/30. "
         
+        # Analyze risk distribution
         if risks:
             high_risks = [r for r in risks if r["severity"] == "high"]
             medium_risks = [r for r in risks if r["severity"] == "medium"]
+            low_risks = [r for r in risks if r["severity"] == "low"]
             
-            summary += f"Found {len(risks)} risk items ({len(high_risks)} high, {len(medium_risks)} medium). "
+            summary += f"The analysis identified {len(risks)} risk factors: {len(high_risks)} high-priority, {len(medium_risks)} medium-priority, and {len(low_risks)} low-priority items. "
+            
+            # Highlight key risk categories
+            risk_categories = {}
+            for risk in risks:
+                category = risk["category"]
+                if category not in risk_categories:
+                    risk_categories[category] = 0
+                risk_categories[category] += 1
+            
+            if risk_categories:
+                top_categories = sorted(risk_categories.items(), key=lambda x: x[1], reverse=True)[:3]
+                category_names = [cat[0] for cat in top_categories]
+                summary += f"Key risk areas include: {', '.join(category_names)}. "
         else:
-            summary += "No significant risks detected. "
+            summary += "No significant risks were detected in this contract. "
         
+        # Compliance analysis
         if compliance:
-            summary += f"Identified {len(compliance)} compliance considerations. "
-        
-        if risk_score >= 15:
-            summary += "RECOMMENDATION: Legal review required before signing."
-        elif risk_score >= 10:
-            summary += "RECOMMENDATION: Consider legal review for high-risk terms."
+            compliance_regs = {}
+            for comp in compliance:
+                reg = comp["regulation"]
+                if reg not in compliance_regs:
+                    compliance_regs[reg] = 0
+                compliance_regs[reg] += 1
+            
+            reg_names = list(compliance_regs.keys())
+            summary += f"Compliance considerations include: {', '.join(reg_names)}. "
         else:
-            summary += "Contract appears to have standard terms."
+            summary += "No specific compliance issues were identified. "
+        
+        # Strategic recommendations based on risk level
+        if risk_level in ["CRITICAL", "HIGH"]:
+            summary += "STRATEGIC RECOMMENDATION: This contract requires immediate legal review and extensive negotiations. Consider requesting substantial modifications or walking away if terms cannot be improved. Focus on liability limitations, payment terms, and termination clauses."
+        elif risk_level == "MEDIUM":
+            summary += "STRATEGIC RECOMMENDATION: This contract has some concerning terms but is generally negotiable. Focus on the highest-risk items while accepting reasonable terms on others. Prioritize negotiation of liability caps and payment terms."
+        else:
+            summary += "STRATEGIC RECOMMENDATION: This contract appears to have reasonable terms. Minor negotiations may be beneficial but are not critical. Focus on ensuring all terms are clearly understood and documented."
         
         return summary 
