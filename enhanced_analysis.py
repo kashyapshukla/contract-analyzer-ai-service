@@ -287,25 +287,28 @@ class EnhancedContractAnalyzer:
     def analyze_with_openrouter(self, content: str) -> str:
         if not self.openrouter_api_key:
             raise Exception("OpenRouter API key not configured")
+        if len(self.openrouter_api_key.strip()) < 30 or " " in self.openrouter_api_key:
+            print(f"[WARNING] OpenRouter API key looks suspicious: '{self.openrouter_api_key}' (length: {len(self.openrouter_api_key)})")
         prompt = (
             "Analyze this contract for legal risks and compliance issues. "
             "Provide a detailed summary of risks, compliance issues, and negotiation points.\n\n"
             f"{content[:2000]}"
         )
+        headers = {
+            "Authorization": f"Bearer {self.openrouter_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "openai/gpt-4o",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 1024
+        }
+        print("[DEBUG] OpenRouter request headers:", headers)
+        print("[DEBUG] OpenRouter request payload:", payload)
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.openrouter_api_key}",
-                "Content-Type": "application/json",
-                # Optionally:
-                # "HTTP-Referer": "https://yourdomain.com",
-                # "X-Title": "Your App Name",
-            },
-            json={
-                "model": "openai/gpt-4o",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 1024
-            },
+            headers=headers,
+            json=payload,
             timeout=60
         )
         result = response.json()
