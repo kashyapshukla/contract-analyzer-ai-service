@@ -293,15 +293,25 @@ class EnhancedContractAnalyzer:
         )
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {self.openrouter_api_key}"},
+            headers={
+                "Authorization": f"Bearer {self.openrouter_api_key}",
+                "Content-Type": "application/json",
+                # Optionally:
+                # "HTTP-Referer": "https://yourdomain.com",
+                # "X-Title": "Your App Name",
+            },
             json={
-                "model": "mistralai/mistral-7b-instruct:free",
+                "model": "openai/gpt-4o",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 1024
             },
             timeout=60
         )
         result = response.json()
+        print("OpenRouter raw response:", result)
+        if "choices" not in result:
+            error_message = result.get("error", {}).get("message", str(result))
+            raise Exception(f"OpenRouter API error: {error_message}")
         return result["choices"][0]["message"]["content"]
 
     async def analyze_risks_with_ai(self, content: str) -> tuple[list[dict], int]:
