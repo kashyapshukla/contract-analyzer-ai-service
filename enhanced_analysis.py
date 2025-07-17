@@ -212,8 +212,8 @@ class EnhancedContractAnalyzer:
             if not self.huggingface_api_key:
                 raise Exception("Hugging Face API key not configured")
             
-            # Use a good text generation model for analysis
-            model_name = "gpt2"  # Good for text generation and analysis
+            # Use a better model for text analysis
+            model_name = "microsoft/DialoGPT-medium"  # Better for structured analysis
             
             headers = {
                 "Authorization": f"Bearer {self.huggingface_api_key}",
@@ -295,6 +295,10 @@ class EnhancedContractAnalyzer:
                 
         except Exception as e:
             print(f"Hugging Face analysis failed: {str(e)}")
+            if "403" in str(e):
+                print("Hugging Face API key may be invalid or missing. Check environment variables.")
+            elif "401" in str(e):
+                print("Hugging Face API key is invalid. Please check your token.")
             return None
 
     def create_structured_response_from_text(self, text: str, original_content: str) -> Dict[str, Any]:
